@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 from sqlalchemy import select
@@ -98,9 +98,10 @@ class TicketService:
         await db.commit()
         await db.refresh(ticket)
 
-        # Send MODERATED event to B2B
+        # idempotency_key = ticket_id (stable UUID) — identical on retry so B2B deduplicates.
+        # uuid4() would differ on each retry and risk double-publication in the catalog.
         event_body = {
-            "idempotency_key": str(uuid4()),
+            "idempotency_key": str(ticket_id),
             "product_id": str(ticket.product_id),
             "event_type": "MODERATED",
             "occurred_at": now.isoformat(),
