@@ -306,10 +306,10 @@ async def test_mixed_hard_soft_reasons_returns_400():
 
 
 @pytest.mark.asyncio
-async def test_hard_block_b2b_failure_keeps_hard_blocked():
+async def test_hard_block_b2b_failure_rolls_back_to_in_review():
     """
-    If B2B call fails after hard-block DB commit, status stays HARD_BLOCKED.
-    Terminal state must not roll back — B2B can retry the event.
+    If B2B call fails during hard-block, status rolls back to IN_REVIEW (502).
+    Moderator must retry. Matches reference implementation behaviour.
     """
     mod_id = uuid4()
     ticket = await _seed_ticket(status="IN_REVIEW", moderator_id=mod_id)
@@ -327,7 +327,7 @@ async def test_hard_block_b2b_failure_keeps_hard_blocked():
                 headers=_auth(mod_id),
             )
 
-    # Hard-block is terminal — even if B2B fails, we return 200 (status committed)
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["code"] == "B2B_UNAVAILABLE"
     row = await _get_ticket(ticket.id)
-    assert row.status == "HARD_BLOCKED"
+    assert row.status == "IN_REVIEW"
