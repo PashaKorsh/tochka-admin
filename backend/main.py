@@ -4,6 +4,7 @@ NeoMarket Moderation API — FastAPI application entry-point.
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -34,6 +35,16 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     else:
         body = {"code": "ERROR", "message": str(detail)}
     return JSONResponse(status_code=exc.status_code, content=body)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    message = errors[0]["msg"] if errors else "Validation error"
+    return JSONResponse(
+        status_code=400,
+        content={"code": "INVALID_REQUEST", "message": message},
+    )
 
 
 app.include_router(moderation_router)

@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
 
 
 async def create_tables() -> None:
-    from backend.modules.moderation import models as _mod_models  # noqa: F401
+    from backend.modules.moderation import models as _mod_models  # noqa: F401 — registers all models
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

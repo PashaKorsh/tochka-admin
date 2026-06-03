@@ -14,7 +14,7 @@ State machine (canon moderation-flows.md):
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSON, UUID as PG_UUID
 
 from backend.database import Base
@@ -48,6 +48,8 @@ class ProductModeration(Base):
     # MOD-3/4: set when moderator makes a decision (approve/block)
     decision_at = Column(DateTime(timezone=True), nullable=True)
     moderator_comment = Column(String(2000), nullable=True)
+    # MOD-4/5: blocking reason UUIDs stored as JSON array (spec: blocking_reason_ids)
+    blocking_reason_ids = Column(JSON, nullable=True)
 
     date_created = Column(
         DateTime(timezone=True),
@@ -60,6 +62,46 @@ class ProductModeration(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+class BlockingReason(Base):
+    """
+    Reference table of blocking reasons — spec moderation/openapi.yaml#BlockingReasonResponse.
+    hard_block=True → HARD_BLOCKED (terminal); hard_block=False → BLOCKED (seller can fix).
+    """
+    __tablename__ = "blocking_reasons"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(64), nullable=False, unique=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    hard_block = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class FieldReport(Base):
+    """
+    Per-field moderator remarks for a ticket decision — spec moderation/openapi.yaml#FieldReport.
+    ADR: separate table chosen over JSON column for analytics (filter by field_path, severity).
+    JSON column would be simpler but breaks GROUP BY field_path queries.
+    """
+    __tablename__ = "field_reports"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_moderation_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("product_moderation.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    field_path = Column(String(500), nullable=False)
+    message = Column(String(1000), nullable=False)
+    severity = Column(String(16), nullable=False, default="ERROR")  # INFO | WARNING | ERROR
 
 
 class ProcessedEvent(Base):

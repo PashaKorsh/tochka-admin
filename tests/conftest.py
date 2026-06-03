@@ -39,7 +39,10 @@ async def override_db():
 
     # Truncate all tables before each test so tests don't leak data into each other
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE TABLE product_moderation, processed_events RESTART IDENTITY CASCADE"))
+        await conn.execute(text(
+            "TRUNCATE TABLE field_reports, product_moderation, processed_events, blocking_reasons "
+            "RESTART IDENTITY CASCADE"
+        ))
 
     async def _get_test_db():
         async with factory() as session:
