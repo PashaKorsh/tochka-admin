@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.database import create_tables
+from backend.modules.blocking_reasons.router import router as blocking_reasons_router
 from backend.modules.moderation.router import router as moderation_router
 from backend.modules.queue.router import router as queue_router
 from backend.modules.tickets.router import router as tickets_router
@@ -50,6 +51,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(moderation_router)
 app.include_router(queue_router)
 app.include_router(tickets_router)
+app.include_router(blocking_reasons_router)
 
 
 @app.get("/health")
