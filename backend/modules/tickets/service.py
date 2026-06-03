@@ -76,6 +76,9 @@ class TicketService:
         if ticket is None:
             raise LookupError("NOT_FOUND")
 
+        if ticket.status == "HARD_BLOCKED":
+            raise ValueError("HARD_BLOCKED_TERMINAL")
+
         if ticket.status != "IN_REVIEW":
             raise ValueError("NOT_IN_REVIEW")
 

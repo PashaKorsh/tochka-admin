@@ -14,7 +14,7 @@ from backend.auth import get_current_moderator_id
 from backend.database import get_db
 from backend.modules.tickets.schemas import ApproveRequest, BlockRequest, TicketResponse
 from backend.modules.tickets.service import TicketService
-from backend.modules.tickets.service_block import SoftBlockService
+from backend.modules.tickets.service_block import BlockService
 
 router = APIRouter(prefix="/api/v1", tags=["Tickets"])
 
@@ -58,6 +58,11 @@ async def approve_ticket(
         )
     except ValueError as exc:
         code = str(exc)
+        if code == "HARD_BLOCKED_TERMINAL":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "HARD_BLOCKED_TERMINAL", "message": "Ticket is permanently blocked and cannot be modified"},
+            )
         if code == "NOT_IN_REVIEW":
             message = "Ticket is not in IN_REVIEW status (it may have been edited or already decided)"
         else:  # NO_SKU
@@ -95,7 +100,7 @@ async def block_ticket(
     field_reports_dicts = [fr.model_dump() for fr in request.field_reports]
 
     try:
-        ticket = await SoftBlockService.soft_block(
+        ticket = await BlockService.block(
             db,
             ticket_id=ticket_id,
             moderator_id=moderator_id,
@@ -110,7 +115,6 @@ async def block_ticket(
                 status_code=404,
                 detail={"code": "NOT_FOUND", "message": "Ticket not found"},
             )
-        # UNKNOWN_REASON
         raise HTTPException(
             status_code=400,
             detail={"code": "UNKNOWN_REASON", "message": "One or more blocking_reason_ids not found or inactive"},
@@ -122,14 +126,24 @@ async def block_ticket(
         )
     except ValueError as exc:
         code = str(exc)
-        if code == "HARD_BLOCK_REASON":
+        if code == "HARD_BLOCKED_TERMINAL":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "HARD_BLOCKED_TERMINAL", "message": "Ticket is permanently blocked and cannot be modified"},
+            )
+        if code == "NOT_IN_REVIEW":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "NOT_IN_REVIEW", "message": "Ticket is not in IN_REVIEW status"},
+            )
+        if code == "MIXED_REASONS":
             raise HTTPException(
                 status_code=400,
-                detail={"code": "HARD_BLOCK_REASON", "message": "Use hard-block flow for reasons with hard_block=True"},
+                detail={"code": "MIXED_REASONS", "message": "Cannot mix hard_block=True and hard_block=False reasons"},
             )
         raise HTTPException(
             status_code=409,
-            detail={"code": code, "message": "Ticket is not in IN_REVIEW status"},
+            detail={"code": code, "message": "Conflict"},
         )
     except RuntimeError:
         raise HTTPException(
