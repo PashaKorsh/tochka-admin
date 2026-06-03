@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from backend.database import create_tables
 from backend.modules.moderation.router import router as moderation_router
 from backend.modules.queue.router import router as queue_router
+from backend.modules.tickets.router import router as tickets_router
 
 
 @asynccontextmanager
@@ -37,6 +38,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 app.include_router(moderation_router)
 app.include_router(queue_router)
+app.include_router(tickets_router)
 
 
 @app.get("/health")

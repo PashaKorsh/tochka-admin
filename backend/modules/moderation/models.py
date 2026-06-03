@@ -45,6 +45,9 @@ class ProductModeration(Base):
     claimed_at = Column(DateTime(timezone=True), nullable=True)
     # = claimed_at + IN_REVIEW_TTL_MINUTES; auto-return to PENDING when expired
     claim_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # MOD-3/4: set when moderator makes a decision (approve/block)
+    decision_at = Column(DateTime(timezone=True), nullable=True)
+    moderator_comment = Column(String(2000), nullable=True)
 
     date_created = Column(
         DateTime(timezone=True),
