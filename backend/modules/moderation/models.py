@@ -5,10 +5,10 @@ product_moderation — moderation queue per product.
 processed_events   — idempotency log (deduplication by idempotency_key).
 
 State machine (canon moderation-flows.md):
-  PENDING → IN_REVIEW → MODERATED
+  PENDING → IN_REVIEW → APPROVED
                       → BLOCKED → (EDITED) → PENDING
                       → HARD_BLOCKED (terminal; only super-admin can reset)
-  MODERATED → (EDITED) → PENDING
+  APPROVED → (EDITED) → PENDING
   PENDING/IN_REVIEW → (DELETED) → record deleted
 """
 import uuid
@@ -26,10 +26,11 @@ class ProductModeration(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     product_id = Column(PG_UUID(as_uuid=True), nullable=False, unique=True, index=True)
     seller_id = Column(PG_UUID(as_uuid=True), nullable=False)
+    category_id = Column(PG_UUID(as_uuid=True), nullable=True)
 
     status = Column(
         String(32), nullable=False, default="PENDING"
-    )  # PENDING | IN_REVIEW | MODERATED | BLOCKED | HARD_BLOCKED
+    )  # PENDING | IN_REVIEW | APPROVED | BLOCKED | HARD_BLOCKED
 
     queue_priority = Column(Integer, nullable=False, default=3)
 
@@ -40,6 +41,10 @@ class ProductModeration(Base):
     json_after = Column(JSON, nullable=False)
 
     moderator_id = Column(PG_UUID(as_uuid=True), nullable=True)
+    # MOD-2: set when moderator claims the ticket (SELECT FOR UPDATE SKIP LOCKED)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+    # = claimed_at + IN_REVIEW_TTL_MINUTES; auto-return to PENDING when expired
+    claim_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     date_created = Column(
         DateTime(timezone=True),
