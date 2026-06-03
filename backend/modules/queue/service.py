@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -41,6 +41,7 @@ def _to_response(row: ProductModeration) -> TicketResponse:
         id=row.id,
         product_id=row.product_id,
         seller_id=row.seller_id,
+        category_id=row.category_id,
         kind=kind,
         status=row.status,
         queue_priority=row.queue_priority,
@@ -59,6 +60,7 @@ class QueueService:
         *,
         moderator_id: UUID,
         queue_priority: Optional[int] = None,
+        category_ids: Optional[List[UUID]] = None,
     ) -> TicketResponse | None:
         """
         Atomically claim the next PENDING ticket.
@@ -76,6 +78,7 @@ class QueueService:
           3. SELECT FOR UPDATE SKIP LOCKED (oldest PENDING by date_updated ASC).
              If queue_priority given, filter by it;
              else auto-prioritize: try 1→2→3→4, return first non-empty.
+             If category_ids given, additionally filter by category_id IN (...).
           4. UPDATE found row: status=IN_REVIEW, moderator_id, claimed_at, claim_expires_at.
           5. COMMIT.
         """
@@ -113,12 +116,16 @@ class QueueService:
         found: ProductModeration | None = None
 
         for priority in priorities:
+            conditions = [
+                ProductModeration.status == "PENDING",
+                ProductModeration.queue_priority == priority,
+            ]
+            if category_ids:
+                conditions.append(ProductModeration.category_id.in_(category_ids))
+
             stmt = (
                 select(ProductModeration)
-                .where(
-                    ProductModeration.status == "PENDING",
-                    ProductModeration.queue_priority == priority,
-                )
+                .where(*conditions)
                 .order_by(ProductModeration.date_updated.asc())
                 .limit(1)
                 .with_for_update(skip_locked=True)

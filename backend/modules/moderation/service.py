@@ -104,6 +104,7 @@ async def _handle_created(db: AsyncSession, event: IncomingB2BEvent) -> None:
     db.add(ProductModeration(
         product_id=payload.product_id,
         seller_id=payload.seller_id,
+        category_id=payload.category_id,
         status="PENDING",
         queue_priority=payload.queue_priority,
         json_before=None,
@@ -146,6 +147,8 @@ async def _handle_edited(db: AsyncSession, event: IncomingB2BEvent) -> None:
 
     record.json_before = payload.json_before if payload.json_before else record.json_after
     record.json_after = payload.json_after
+    if payload.category_id is not None:
+        record.category_id = payload.category_id
     record.status = "PENDING"
     record.queue_priority = new_priority
     record.moderator_id = None  # reset — card re-enters queue

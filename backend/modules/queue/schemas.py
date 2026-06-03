@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 class ClaimRequest(BaseModel):
     """Optional body for POST /api/v1/queue/claim."""
     queue_priority: Optional[int] = Field(None, ge=1, le=4)
+    category_ids: Optional[List[UUID]] = None
 
 
 class TicketResponse(BaseModel):
@@ -25,6 +26,7 @@ class TicketResponse(BaseModel):
     id: UUID
     product_id: UUID
     seller_id: UUID
+    category_id: Optional[UUID] = None
     kind: str                          # CREATE | EDIT
     status: str                        # IN_REVIEW after claim
     queue_priority: int

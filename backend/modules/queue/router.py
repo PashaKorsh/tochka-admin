@@ -34,12 +34,14 @@ async def claim_next(
     TTL 30 minutes; auto-return to PENDING if claim_expires_at < now.
     """
     queue_priority = request.queue_priority if request else None
+    category_ids = request.category_ids if request else None
 
     try:
         ticket = await QueueService.claim_next(
             db,
             moderator_id=moderator_id,
             queue_priority=queue_priority,
+            category_ids=category_ids,
         )
     except ValueError as exc:
         if str(exc) == "MODERATOR_ALREADY_IN_REVIEW":

@@ -6,6 +6,7 @@ import asyncio
 import os
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -35,6 +36,10 @@ async def override_db():
 
     engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    # Truncate all tables before each test so tests don't leak data into each other
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE TABLE product_moderation, processed_events RESTART IDENTITY CASCADE"))
 
     async def _get_test_db():
         async with factory() as session:
