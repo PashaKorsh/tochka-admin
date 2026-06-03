@@ -276,16 +276,18 @@ async def test_soft_block_invalid_field_name_returns_400():
 
 
 @pytest.mark.asyncio
-async def test_soft_block_hard_reason_returns_400():
+async def test_soft_block_hard_reason_routes_to_hard_blocked():
     """
-    Attempting soft-block with a hard_block=True reason → 400 HARD_BLOCK_REASON.
-    Must use hard-block flow (MOD-5) for that reason.
+    /block with hard_block=True reason → routes to hard-block (HARD_BLOCKED), not 400.
+
+    MOD-5 uses the same /block endpoint; routing is determined by the reason's
+    hard_block flag. Passing a hard reason performs a hard-block (terminal).
     """
     mod_id = uuid4()
     ticket = await _seed_ticket(status="IN_REVIEW", moderator_id=mod_id)
     hard_reason = await _seed_reason(hard_block=True)
 
-    cm, _ = _mock_b2b_ok()
+    cm, mock_client = _mock_b2b_ok()
     with cm:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
@@ -294,11 +296,14 @@ async def test_soft_block_hard_reason_returns_400():
                 headers=_auth(mod_id),
             )
 
-    assert resp.status_code == 400, resp.text
-    assert resp.json()["code"] == "HARD_BLOCK_REASON"
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "HARD_BLOCKED"
 
     row = await _get_ticket(ticket.id)
-    assert row.status == "IN_REVIEW"
+    assert row.status == "HARD_BLOCKED"
+    # B2B event carries hard_block=True
+    event = mock_client.post.call_args.kwargs["json"]
+    assert event["hard_block"] is True
 
 
 @pytest.mark.asyncio
