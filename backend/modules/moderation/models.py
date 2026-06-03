@@ -40,6 +40,10 @@ class ProductModeration(Base):
     json_after = Column(JSON, nullable=False)
 
     moderator_id = Column(PG_UUID(as_uuid=True), nullable=True)
+    # MOD-2: set when moderator claims the ticket (SELECT FOR UPDATE SKIP LOCKED)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+    # = claimed_at + IN_REVIEW_TTL_MINUTES; auto-return to PENDING when expired
+    claim_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     date_created = Column(
         DateTime(timezone=True),
