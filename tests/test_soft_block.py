@@ -169,6 +169,7 @@ async def test_soft_block_transitions_to_blocked_with_field_reports():
 async def test_soft_block_emits_event_to_b2b():
     """
     BLOCKED event is sent to B2B with event_type=BLOCKED and hard_block=False.
+    field_reports are included in B2B format (field_name, sku_id, comment).
     """
     mod_id = uuid4()
     ticket = await _seed_ticket(status="IN_REVIEW", moderator_id=mod_id)
@@ -179,7 +180,10 @@ async def test_soft_block_emits_event_to_b2b():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 _URL.format(ticket_id=ticket.id),
-                json={"blocking_reason_ids": [str(reason.id)]},
+                json={
+                    "blocking_reason_ids": [str(reason.id)],
+                    "field_reports": [{"field_path": "title", "message": "Too short"}],
+                },
                 headers=_auth(mod_id),
             )
 
@@ -191,6 +195,8 @@ async def test_soft_block_emits_event_to_b2b():
     assert event["hard_block"] is False
     assert event["blocking_reason_id"] == str(reason.id)
     assert event["product_id"] == str(ticket.product_id)
+    # field_reports transformed to B2B format
+    assert event["field_reports"] == [{"field_name": "title", "sku_id": None, "comment": "Too short"}]
 
 
 @pytest.mark.asyncio

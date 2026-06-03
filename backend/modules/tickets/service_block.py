@@ -85,6 +85,21 @@ async def _load_and_validate_reasons(
     return reasons
 
 
+def _to_b2b_field_reports(field_reports: Optional[List[dict]]) -> list:
+    """
+    Transform internal FieldReport format (moderation spec) to B2B spec format.
+
+    Moderation stores: {field_path, message, severity}
+    B2B expects:       {field_name, sku_id, comment}
+
+    Mapping: field_path→field_name, message→comment, sku_id=None (not stored internally).
+    """
+    return [
+        {"field_name": fr["field_path"], "sku_id": None, "comment": fr["message"]}
+        for fr in (field_reports or [])
+    ]
+
+
 async def _apply_b2b_event(
     client: httpx.AsyncClient,
     *,
@@ -95,6 +110,7 @@ async def _apply_b2b_event(
     comment: Optional[str],
     hard_block: bool,
     occurred_at: datetime,
+    field_reports: Optional[List[dict]] = None,
 ) -> None:
     # idempotency_key = ticket_id (stable) — identical on retry, B2B deduplicates safely.
     resp = await client.post(
@@ -108,6 +124,7 @@ async def _apply_b2b_event(
             "moderator_comment": comment,
             "blocking_reason_id": str(primary_reason.id),
             "hard_block": hard_block,
+            "field_reports": _to_b2b_field_reports(field_reports),
         },
         headers={"X-Service-Key": MOD_TO_B2B_KEY},
         timeout=10.0,
@@ -204,24 +221,21 @@ class BlockService:
                     comment=comment,
                     hard_block=is_hard,
                     occurred_at=now,
+                    field_reports=field_reports,
                 )
             finally:
                 if own_client:
                     await client.aclose()
 
         except Exception as exc:
-            if is_hard:
-                # Hard-block is terminal — do NOT roll back. B2B can retry or admin fixes.
-                # The product is already HARD_BLOCKED in our DB which is the source of truth.
-                pass
-            else:
-                # Soft-block: roll back so moderator can retry
-                ticket.status = "IN_REVIEW"
-                ticket.decision_at = None
-                ticket.moderator_comment = None
-                ticket.blocking_reason_ids = None
-                ticket.date_updated = now
-                await db.commit()
-                raise RuntimeError("B2B_UNAVAILABLE") from exc
+            # Roll back to IN_REVIEW on B2B failure (both soft and hard).
+            # Matches reference implementation: moderator must retry explicitly.
+            ticket.status = "IN_REVIEW"
+            ticket.decision_at = None
+            ticket.moderator_comment = None
+            ticket.blocking_reason_ids = None
+            ticket.date_updated = now
+            await db.commit()
+            raise RuntimeError("B2B_UNAVAILABLE") from exc
 
         return _to_response(ticket)
