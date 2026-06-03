@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 from sqlalchemy import delete, select
@@ -88,6 +88,7 @@ async def _load_and_validate_reasons(
 async def _apply_b2b_event(
     client: httpx.AsyncClient,
     *,
+    ticket_id: UUID,
     product_id: UUID,
     moderator_id: UUID,
     primary_reason: BlockingReason,
@@ -95,10 +96,11 @@ async def _apply_b2b_event(
     hard_block: bool,
     occurred_at: datetime,
 ) -> None:
+    # idempotency_key = ticket_id (stable) — identical on retry, B2B deduplicates safely.
     resp = await client.post(
         f"{B2B_URL}/api/v1/moderation/events",
         json={
-            "idempotency_key": str(uuid4()),
+            "idempotency_key": str(ticket_id),
             "product_id": str(product_id),
             "event_type": "BLOCKED",
             "occurred_at": occurred_at.isoformat(),
@@ -195,6 +197,7 @@ class BlockService:
             try:
                 await _apply_b2b_event(
                     client,
+                    ticket_id=ticket_id,
                     product_id=ticket.product_id,
                     moderator_id=moderator_id,
                     primary_reason=primary_reason,
